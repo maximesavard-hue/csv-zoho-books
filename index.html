@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Convertisseur CSV – Zoho Books</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; color: #222; min-height: 100vh; padding: 2rem 1rem; }
+  .card { background: white; border-radius: 12px; max-width: 640px; margin: 0 auto; padding: 2rem; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+  h1 { font-size: 1.3rem; font-weight: 600; margin-bottom: 0.3rem; }
+  .subtitle { font-size: 0.85rem; color: #666; margin-bottom: 2rem; }
+  .step { margin-bottom: 1.8rem; }
+  .step-label { font-size: 0.78rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #888; margin-bottom: 0.6rem; }
+  .bank-btns { display: flex; gap: 0.6rem; flex-wrap: wrap; }
+  .bank-btn { padding: 0.5rem 1.2rem; border-radius: 8px; border: 1.5px solid #ddd; background: white; cursor: pointer; font-size: 0.9rem; transition: all 0.15s; }
+  .bank-btn:hover { border-color: #4f6ef7; color: #4f6ef7; }
+  .bank-btn.active { border-color: #4f6ef7; background: #eef1ff; color: #4f6ef7; font-weight: 500; }
+  .account-btns { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.5rem; }
+  .account-btn { padding: 0.4rem 1rem; border-radius: 6px; border: 1.5px solid #ddd; background: white; cursor: pointer; font-size: 0.85rem; transition: all 0.15s; }
+  .account-btn:hover { border-color: #4f6ef7; }
+  .account-btn.active { border-color: #4f6ef7; background: #eef1ff; color: #4f6ef7; font-weight: 500; }
+  .dropzone { border: 2px dashed #ccc; border-radius: 10px; padding: 2rem; text-align: center; cursor: pointer; transition: all 0.15s; color: #888; }
+  .dropzone:hover, .dropzone.drag { border-color: #4f6ef7; background: #f5f7ff; color: #4f6ef7; }
+  .dropzone.loaded { border-color: #22c55e; background: #f0fdf4; color: #16a34a; }
+  .dropzone-icon { font-size: 2rem; margin-bottom: 0.5rem; }
+  .dropzone-text { font-size: 0.9rem; }
+  .hidden { display: none; }
+  .preview-wrap { overflow-x: auto; margin-top: 0.8rem; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+  th { background: #f5f5f5; padding: 6px 10px; text-align: left; font-weight: 600; border-bottom: 1px solid #eee; white-space: nowrap; }
+  td { padding: 5px 10px; border-bottom: 1px solid #f0f0f0; white-space: nowrap; color: #333; }
+  .badge { display: inline-block; background: #dcfce7; color: #16a34a; font-size: 0.75rem; padding: 2px 8px; border-radius: 99px; font-weight: 500; margin-left: 0.5rem; }
+  .btn-dl { display: flex; align-items: center; gap: 0.5rem; padding: 0.7rem 1.5rem; background: #4f6ef7; color: white; border: none; border-radius: 8px; font-size: 0.95rem; font-weight: 500; cursor: pointer; transition: background 0.15s; margin-top: 1.2rem; }
+  .btn-dl:hover { background: #3b55d4; }
+  .error { font-size: 0.85rem; color: #dc2626; margin-top: 0.5rem; padding: 0.5rem 0.8rem; background: #fef2f2; border-radius: 6px; }
+  .info { font-size: 0.82rem; color: #666; margin-top: 0.5rem; }
+  .note { font-size: 0.8rem; color: #888; background: #fafafa; border-left: 3px solid #ddd; padding: 0.5rem 0.8rem; border-radius: 0 6px 6px 0; margin-top: 1rem; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>Convertisseur CSV – Zoho Books</h1>
+  <p class="subtitle">Transforme l'export de ta banque en fichier prêt à importer dans Zoho Books.</p>
+
+  <!-- ÉTAPE 1 : Banque -->
+  <div class="step">
+    <div class="step-label">Étape 1 — Sélectionner la banque</div>
+    <div class="bank-btns">
+      <button class="bank-btn active" onclick="selectBank('desjardins')">Desjardins</button>
+      <button class="bank-btn" onclick="selectBank('td')">TD</button>
+    </div>
+  </div>
+
+  <!-- ÉTAPE 2 : Compte (Desjardins seulement) -->
+  <div class="step" id="step-account">
+    <div class="step-label">Étape 2 — Type de compte</div>
+    <div id="account-btns" class="account-btns">
+      <span class="info">Importe un fichier pour détecter les comptes disponibles.</span>
+    </div>
+  </div>
+
+  <!-- ÉTAPE 3 : Upload -->
+  <div class="step">
+    <div class="step-label" id="upload-label">Étape 3 — Importer le fichier CSV</div>
+    <div class="dropzone" id="dropzone"
+      onclick="document.getElementById('fileInput').click()"
+      ondragover="onDrag(event,true)"
+      ondragleave="onDrag(event,false)"
+      ondrop="onDrop(event)">
+      <div class="dropzone-icon">📂</div>
+      <div class="dropzone-text" id="droptext">Glisser le fichier ici ou cliquer pour parcourir</div>
+    </div>
+    <input type="file" id="fileInput" accept=".csv" class="hidden" onchange="loadFile(this.files[0])">
+    <div id="error-msg" class="hidden"></div>
+  </div>
+
+  <!-- RÉSULTAT -->
+  <div class="step hidden" id="step-result">
+    <div class="step-label">
+      Aperçu du résultat
+      <span class="badge" id="row-count"></span>
+    </div>
+    <div class="preview-wrap">
+      <table id="preview-table"></table>
+    </div>
+    <p class="note">Seules les 5 premières lignes sont affichées. Le fichier complet sera téléchargé.</p>
+    <button class="btn-dl" onclick="downloadCSV()">⬇ Télécharger le CSV Zoho Books</button>
+  </div>
+</div>
+
+<script>
+const BANKS = {
+  desjardins: {
+    hasHeader: false,
+    skipFirstRow: true,
+    typeCol: 2,
+    dateCol: 3,
+    descCol: 5,
+    debitCol: 7,
+    creditCol: 8,
+    balanceCol: 13,
+    needsAccountFilter: true
+  },
+  td: {
+    hasHeader: false,
+    skipFirstRow: false,
+    typeCol: null,
+    dateCol: 0,
+    descCol: 1,
+    debitCol: 2,
+    creditCol: 3,
+    balanceCol: 4,
+    needsAccountFilter: false
+  }
+};
+
+let state = {
+  bank: 'desjardins',
+  accountCode: null,
+  allRows: [],
+  outputRows: []
+};
+
+function selectBank(b) {
+  state.bank = b;
+  state.accountCode = null;
+  state.allRows = [];
+  state.outputRows = [];
+
+  document.querySelectorAll('.bank-btn').forEach(el => el.classList.remove('active'));
+  event.target.classList.add('active');
+
+  const cfg = BANKS[b];
+  document.getElementById('step-account').style.display = cfg.needsAccountFilter ? '' : 'none';
+  document.getElementById('upload-label').textContent = 'Étape ' + (cfg.needsAccountFilter ? '3' : '2') + ' — Importer le fichier CSV';
+  document.getElementById('step-result').classList.add('hidden');
+  document.getElementById('account-btns').innerHTML = '<span class="info">Importe un fichier pour détecter les comptes disponibles.</span>';
+  resetDropzone();
+}
+
+function resetDropzone() {
+  const dz = document.getElementById('dropzone');
+  dz.className = 'dropzone';
+  document.getElementById('droptext').textContent = 'Glisser le fichier ici ou cliquer pour parcourir';
+  document.getElementById('fileInput').value = '';
+  document.getElementById('error-msg').classList.add('hidden');
+  document.getElementById('step-result').classList.add('hidden');
+}
+
+function onDrag(e, active) {
+  e.preventDefault();
+  document.getElementById('dropzone').className = 'dropzone' + (active ? ' drag' : '');
+}
+
+function onDrop(e) {
+  e.preventDefault();
+  document.getElementById('dropzone').className = 'dropzone';
+  loadFile(e.dataTransfer.files[0]);
+}
+
+function parseCSV(text) {
+  const lines = text.split(/\r?\n/);
+  return lines.map(line => {
+    const cols = []; let cur = '', inQ = false;
+    for (let c of line) {
+      if (c === '"') { inQ = !inQ; }
+      else if (c === ',' && !inQ) { cols.push(cur.trim()); cur = ''; }
+      else { cur += c; }
+    }
+    cols.push(cur.trim());
+    return cols;
+  }).filter(r => r.some(c => c !== ''));
+}
+
+function loadFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      let text = e.target.result;
+      if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+      const rows = parseCSV(text);
+      const cfg = BANKS[state.bank];
+      let dataRows = cfg.skipFirstRow ? rows.slice(1) : rows;
+      state.allRows = dataRows;
+
+      if (cfg.needsAccountFilter) {
+        const codes = [...new Set(dataRows.map(r => r[cfg.typeCol]).filter(Boolean))];
+        renderAccountBtns(codes);
+        if (codes.length > 0) {
+          state.accountCode = codes[0];
+          document.querySelectorAll('.account-btn')[0]?.classList.add('active');
+        }
+      }
+
+      document.getElementById('dropzone').className = 'dropzone loaded';
+      document.getElementById('droptext').textContent = '✓ ' + file.name;
+      document.getElementById('error-msg').classList.add('hidden');
+      buildOutput();
+    } catch(ex) {
+      showError('Erreur de lecture : ' + ex.message);
+    }
+  };
+  reader.readAsText(file, 'UTF-8');
+}
+
+function renderAccountBtns(codes) {
+  const labels = { EOP: 'Chèques (EOP)', ET2: 'Épargne (ET2)', MC2: 'Carte de crédit (MC2)' };
+  const container = document.getElementById('account-btns');
+  container.innerHTML = '';
+  codes.forEach((code, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'account-btn' + (i === 0 ? ' active' : '');
+    btn.textContent = labels[code] || code;
+    btn.onclick = () => {
+      state.accountCode = code;
+      document.querySelectorAll('.account-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      buildOutput();
+    };
+    container.appendChild(btn);
+  });
+}
+
+function buildOutput() {
+  const cfg = BANKS[state.bank];
+  let rows = state.allRows;
+
+  if (cfg.needsAccountFilter && state.accountCode) {
+    rows = rows.filter(r => r[cfg.typeCol] === state.accountCode);
+  }
+
+  if (rows.length === 0) {
+    showError('Aucune transaction trouvée.');
+    return;
+  }
+
+  state.outputRows = rows.map(r => ({
+    Date: r[cfg.dateCol] || '',
+    Description: (r[cfg.descCol] || '').replace(/\s+/g, ' ').trim(),
+    Debit: r[cfg.debitCol] || '',
+    Credit: r[cfg.creditCol] || '',
+    Solde: r[cfg.balanceCol] || ''
+  }));
+
+  renderPreview();
+}
+
+function renderPreview() {
+  const headers = ['Date', 'Description', 'Debit', 'Credit', 'Solde'];
+  const tbl = document.getElementById('preview-table');
+  tbl.innerHTML =
+    '<tr>' + headers.map(h => '<th>' + h + '</th>').join('') + '</tr>' +
+    state.outputRows.slice(0, 5).map(r =>
+      '<tr>' + headers.map(h => '<td>' + (r[h] || '') + '</td>').join('') + '</tr>'
+    ).join('');
+
+  document.getElementById('row-count').textContent = state.outputRows.length + ' transactions';
+  document.getElementById('step-result').classList.remove('hidden');
+}
+
+function downloadCSV() {
+  const headers = ['Date', 'Description', 'Debit', 'Credit', 'Solde'];
+  const lines = [
+    headers.join(','),
+    ...state.outputRows.map(r => headers.map(h => '"' + (r[h] || '') + '"').join(','))
+  ];
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const suffix = state.bank === 'desjardins' ? 'Desjardins_' + (state.accountCode || '') : 'TD';
+  a.download = suffix + '_ZohoBooks.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function showError(msg) {
+  const el = document.getElementById('error-msg');
+  el.textContent = msg;
+  el.className = 'error';
+}
+
+document.getElementById('step-account').style.display = '';
+</script>
+</body>
+</html>
