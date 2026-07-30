@@ -96,6 +96,7 @@ const BANKS = {
     skipFirstRow: true,
     typeCol: 2,
     dateCol: 3,
+    dateFormat: 'YMD',
     descCol: 5,
     debitCol: 7,
     creditCol: 8,
@@ -107,6 +108,7 @@ const BANKS = {
     skipFirstRow: false,
     typeCol: null,
     dateCol: 0,
+    dateFormat: 'MDY',
     descCol: 1,
     debitCol: 2,
     creditCol: 3,
@@ -114,6 +116,34 @@ const BANKS = {
     needsAccountFilter: false
   }
 };
+
+function parseDateParts(dateStr, format) {
+  const parts = dateStr.split(/[\/\-]/).map(p => p.trim());
+  if (parts.length !== 3) return null;
+  let year, month, day;
+  if (format === 'YMD') { [year, month, day] = parts; }
+  else { [month, day, year] = parts; }
+  year = parseInt(year, 10); month = parseInt(month, 10); day = parseInt(day, 10);
+  if (!year || !month || !day) return null;
+  return { year, month, day };
+}
+
+function getLastTransactionMonthYear() {
+  const cfg = BANKS[state.bank];
+  let latest = null;
+  for (const r of state.outputRows) {
+    const parts = parseDateParts(r.Date, cfg.dateFormat);
+    if (!parts) continue;
+    if (!latest ||
+        parts.year > latest.year ||
+        (parts.year === latest.year && parts.month > latest.month) ||
+        (parts.year === latest.year && parts.month === latest.month && parts.day > latest.day)) {
+      latest = parts;
+    }
+  }
+  if (!latest) return '';
+  return String(latest.month).padStart(2, '0') + String(latest.year).slice(-2);
+}
 
 let state = {
   bank: 'desjardins',
@@ -271,7 +301,8 @@ function downloadCSV() {
   const a = document.createElement('a');
   a.href = url;
   const suffix = state.bank === 'desjardins' ? 'Desjardins_' + (state.accountCode || '') : 'TD';
-  a.download = suffix + '_ZohoBooks.csv';
+  const mmaa = getLastTransactionMonthYear();
+  a.download = mmaa + suffix + '_ZohoBooks.csv';
   a.click();
   URL.revokeObjectURL(url);
 }
