@@ -49,6 +49,7 @@
     <div class="bank-btns">
       <button class="bank-btn active" onclick="selectBank('desjardins')">Desjardins</button>
       <button class="bank-btn" onclick="selectBank('td')">TD</button>
+      <button class="bank-btn" onclick="selectBank('triangle')">Triangle Mastercard</button>
     </div>
   </div>
 
@@ -113,6 +114,17 @@ const BANKS = {
     debitCol: 2,
     creditCol: 3,
     balanceCol: 4,
+    needsAccountFilter: false
+  },
+  triangle: {
+    hasHeader: true,
+    headerMarker: 'REF',
+    typeCol: null,
+    dateCol: 1,
+    dateFormat: 'YMD',
+    descCol: 4,
+    signedAmountCol: 6,
+    balanceCol: null,
     needsAccountFilter: false
   }
 };
@@ -212,7 +224,13 @@ function loadFile(file) {
       if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
       const rows = parseCSV(text);
       const cfg = BANKS[state.bank];
-      let dataRows = cfg.skipFirstRow ? rows.slice(1) : rows;
+      let dataRows;
+      if (cfg.headerMarker) {
+        const headerIdx = rows.findIndex(r => r[0] === cfg.headerMarker);
+        dataRows = headerIdx >= 0 ? rows.slice(headerIdx + 1) : rows;
+      } else {
+        dataRows = cfg.skipFirstRow ? rows.slice(1) : rows;
+      }
       state.allRows = dataRows;
 
       if (cfg.needsAccountFilter) {
@@ -266,13 +284,26 @@ function buildOutput() {
     return;
   }
 
-  state.outputRows = rows.map(r => ({
-    Date: r[cfg.dateCol] || '',
-    Description: (r[cfg.descCol] || '').replace(/\s+/g, ' ').trim(),
-    Debit: r[cfg.debitCol] || '',
-    Credit: r[cfg.creditCol] || '',
-    Solde: r[cfg.balanceCol] || ''
-  }));
+  state.outputRows = rows.map(r => {
+    let debit = '', credit = '';
+    if (cfg.signedAmountCol != null) {
+      const amount = parseFloat(r[cfg.signedAmountCol]);
+      if (!isNaN(amount)) {
+        if (amount >= 0) debit = amount.toFixed(2);
+        else credit = Math.abs(amount).toFixed(2);
+      }
+    } else {
+      debit = r[cfg.debitCol] || '';
+      credit = r[cfg.creditCol] || '';
+    }
+    return {
+      Date: r[cfg.dateCol] || '',
+      Description: (r[cfg.descCol] || '').replace(/\s+/g, ' ').trim(),
+      Debit: debit,
+      Credit: credit,
+      Solde: cfg.balanceCol != null ? (r[cfg.balanceCol] || '') : ''
+    };
+  });
 
   renderPreview();
 }
@@ -300,7 +331,8 @@ function downloadCSV() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  const suffix = state.bank === 'desjardins' ? 'Desjardins_' + (state.accountCode || '') : 'TD';
+  const suffixes = { desjardins: 'Desjardins_' + (state.accountCode || ''), td: 'TD', triangle: 'Triangle' };
+  const suffix = suffixes[state.bank] || state.bank;
   const mmaa = getLastTransactionMonthYear();
   a.download = mmaa + suffix + '_ZohoBooks.csv';
   a.click();
